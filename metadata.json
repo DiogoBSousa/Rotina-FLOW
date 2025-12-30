@@ -1,0 +1,8 @@
+{
+  "name": "Rotina Flow",
+  "description": "A high-performance productivity app with health integration, collaborative routines, and AI insights.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
