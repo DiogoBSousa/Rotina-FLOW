@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { X, Calendar, Tag, AlertCircle, BellRing } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Calendar, Tag, AlertCircle, BellRing, Clock } from 'lucide-react';
 import { Priority, Task } from '../types';
 
 interface AddTaskOverlayProps {
@@ -11,9 +11,21 @@ interface AddTaskOverlayProps {
 const AddTaskOverlay: React.FC<AddTaskOverlayProps> = ({ onClose, onAdd }) => {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>(Priority.MEDIUM);
+  const [startTime, setStartTime] = useState('');
   const [isAnnoying, setIsAnnoying] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Sugerir próximo horário arredondado (intervalo de 15 min)
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const roundedMinutes = Math.ceil((minutes + 5) / 15) * 15;
+    const suggestedDate = new Date(now.getTime() + (roundedMinutes - minutes) * 60000);
+    
+    const sTime = `${suggestedDate.getHours().toString().padStart(2, '0')}:${suggestedDate.getMinutes().toString().padStart(2, '0')}`;
+    setStartTime(sTime);
+  }, []);
 
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && tagInput.trim()) {
@@ -28,6 +40,7 @@ const AddTaskOverlay: React.FC<AddTaskOverlayProps> = ({ onClose, onAdd }) => {
     onAdd({
       title,
       priority,
+      startTime,
       isAnnoying,
       tags,
       dueDate: new Date(),
@@ -40,7 +53,10 @@ const AddTaskOverlay: React.FC<AddTaskOverlayProps> = ({ onClose, onAdd }) => {
       
       <div className="w-full max-w-lg glass rounded-[40px] p-8 shadow-2xl relative animate-in slide-in-from-bottom-8 duration-500">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold tracking-tight">Nova <span className="text-gradient">Tarefa</span></h2>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Nova <span className="text-gradient">Tarefa</span></h2>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Defina horários exatos: 07:45, 12:30...</p>
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-all">
             <X size={24} className="text-slate-400" />
           </button>
@@ -61,6 +77,17 @@ const AddTaskOverlay: React.FC<AddTaskOverlayProps> = ({ onClose, onAdd }) => {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1">
+                <Clock size={12} /> Horário Exato
+              </label>
+              <input 
+                type="time" 
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all [color-scheme:dark]"
+              />
+            </div>
+            <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Prioridade</label>
               <select 
                 value={priority}
@@ -73,19 +100,20 @@ const AddTaskOverlay: React.FC<AddTaskOverlayProps> = ({ onClose, onAdd }) => {
                 <option value={Priority.CRITICAL}>Crítica</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Tags</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={handleAddTag}
-                  placeholder="Enter p/ add"
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
-                />
-                <Tag size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600" />
-              </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Tags</label>
+            <div className="relative">
+              <input 
+                type="text" 
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                placeholder="Enter p/ add"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+              />
+              <Tag size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600" />
             </div>
           </div>
 

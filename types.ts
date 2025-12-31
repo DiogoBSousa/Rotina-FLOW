@@ -21,6 +21,7 @@ export interface Task {
   completed: boolean;
   priority: Priority;
   dueDate?: Date;
+  startTime?: string; // Novo: Horário específico (ex: "07:45")
   reminders: Date[];
   isAnnoying: boolean;
   tags: string[];
@@ -38,6 +39,7 @@ export interface Habit {
   isAutoSynced?: boolean;
   healthMetric?: 'STEPS' | 'SLEEP' | 'WATER';
   goalValue?: number;
+  reminderTime?: string; // Novo: Horário de lembrete (ex: "18:15")
 }
 
 export interface HealthStats {

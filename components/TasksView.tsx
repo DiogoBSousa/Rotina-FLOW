@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { CheckCircle2, Circle, MoreVertical, Trash2, Star, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Circle, MoreVertical, Trash2, Star, AlertCircle, Clock } from 'lucide-react';
 import { Task, Priority } from '../types';
 
 interface TasksViewProps {
@@ -48,7 +48,13 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, setTasks, onDeleteTask }) 
                 </h4>
                 {task.isAnnoying && <AlertCircle size={14} className="text-red-500 animate-pulse" />}
               </div>
-              <div className="flex gap-2 mt-2">
+              <div className="flex items-center gap-3 mt-2">
+                {task.startTime && (
+                  <div className="flex items-center gap-1 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
+                    <Clock size={10} className="text-blue-400" />
+                    <span className="text-[10px] font-black text-blue-400">{task.startTime}</span>
+                  </div>
+                )}
                 {task.tags.map(tag => (
                   <span key={tag} className="text-[10px] bg-white/5 text-slate-500 px-2 py-0.5 rounded-full border border-white/5">#{tag}</span>
                 ))}
