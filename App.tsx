@@ -1,13 +1,12 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Home, List, Activity, Calendar, Settings, Bell, Plus, Sparkles, RefreshCcw, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Home, List, Activity, Calendar, Settings, Bell, Plus, Sparkles, RefreshCcw, MessageSquare, User as UserIcon } from 'lucide-react';
 import { AppView, Task, Habit, Priority, AppNotification, RoutineBlock, HealthStats, User } from './types';
 import HomeView from './components/HomeView';
 import TasksView from './components/TasksView';
 import HabitsView from './components/HabitsView';
 import PlannerView from './components/PlannerView';
 import SettingsView from './components/SettingsView';
-import StatsView from './components/StatsView';
 import NotificationOverlay from './components/NotificationOverlay';
 import AddTaskOverlay from './components/AddTaskOverlay';
 import AddRoutineBlockOverlay from './components/AddRoutineBlockOverlay';
@@ -30,67 +29,74 @@ const App: React.FC = () => {
   const [activeHealthDetail, setActiveHealthDetail] = useState<'STEPS' | 'SLEEP' | 'WATER' | null>(null);
   const [prefilledStartTime, setPrefilledStartTime] = useState('09:00');
   
+  // Estados de dados do usuário
   const [healthStats, setHealthStats] = useState<HealthStats>({
-    steps: 0,
-    stepsGoal: 10000,
-    sleepHours: 0,
-    sleepGoal: 8,
-    waterGlassCount: 0,
-    waterGoal: 10,
-    lastUpdated: new Date(),
-    isSyncing: false,
-    permissionsGranted: false
+    steps: 0, stepsGoal: 10000, sleepHours: 0, sleepGoal: 8,
+    waterGlassCount: 0, waterGoal: 8, lastUpdated: new Date(),
+    isSyncing: false, permissionsGranted: false
   });
 
-  const [habits, setHabits] = useState<Habit[]>([
-    {
-      id: 'h-steps',
-      name: 'Meta de Passos',
-      streak: 5,
-      history: {},
-      targetPerWeek: 7,
-      icon: 'Footprints',
-      color: '#10B981',
-      isAutoSynced: true,
-      healthMetric: 'STEPS',
-      goalValue: 10000
-    },
-    {
-      id: 'h-sleep',
-      name: 'Dormir Bem',
-      streak: 3,
-      history: {},
-      targetPerWeek: 7,
-      icon: 'Moon',
-      color: '#6366F1',
-      isAutoSynced: true,
-      healthMetric: 'SLEEP',
-      goalValue: 7.5
-    }
-  ]);
-
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [routineBlocks, setRoutineBlocks] = useState<RoutineBlock[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showNotificationMock, setShowNotificationMock] = useState(false);
   const [activeNotification, setActiveNotification] = useState<AppNotification | null>(null);
 
-  // Carregar sessão salva
+  // Referência para evitar loop de salvamento no carregamento inicial
+  const initialLoadDone = useRef(false);
+
+  // Carregar sessão e dados do usuário
   useEffect(() => {
     const savedUser = localStorage.getItem('flow_user_session');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      const userData = JSON.parse(savedUser);
+      setUser(userData);
+      loadUserData(userData.id);
     }
   }, []);
+
+  const loadUserData = (userId: string) => {
+    const prefix = `flow_user_${userId}_`;
+    const savedTasks = localStorage.getItem(`${prefix}tasks`);
+    const savedHabits = localStorage.getItem(`${prefix}habits`);
+    const savedRoutine = localStorage.getItem(`${prefix}routine`);
+    const savedHealth = localStorage.getItem(`${prefix}health`);
+
+    if (savedTasks) setTasks(JSON.parse(savedTasks));
+    if (savedHabits) setHabits(JSON.parse(savedHabits));
+    if (savedRoutine) setRoutineBlocks(JSON.parse(savedRoutine));
+    if (savedHealth) setHealthStats(JSON.parse(savedHealth));
+    
+    initialLoadDone.current = true;
+  };
+
+  // Auto-Sync: Salvar sempre que houver mudanças
+  useEffect(() => {
+    if (user && initialLoadDone.current) {
+      const prefix = `flow_user_${user.id}_`;
+      localStorage.setItem(`${prefix}tasks`, JSON.stringify(tasks));
+      localStorage.setItem(`${prefix}habits`, JSON.stringify(habits));
+      localStorage.setItem(`${prefix}routine`, JSON.stringify(routineBlocks));
+      localStorage.setItem(`${prefix}health`, JSON.stringify(healthStats));
+      console.log("☁️ Sincronizado com a nuvem do usuário:", user.name);
+    }
+  }, [tasks, habits, routineBlocks, healthStats, user]);
 
   const handleLogin = (userData: User) => {
     setUser(userData);
     localStorage.setItem('flow_user_session', JSON.stringify(userData));
+    loadUserData(userData.id);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('flow_user_session');
+    // Limpar estados locais
+    setTasks([]);
+    setHabits([]);
+    setRoutineBlocks([]);
+    initialLoadDone.current = false;
     setActiveView('HOME');
   };
 
@@ -99,76 +105,28 @@ const App: React.FC = () => {
       setShowHealthPermissions(true);
       return;
     }
-
     setHealthStats(prev => ({ ...prev, isSyncing: true }));
     await new Promise(resolve => setTimeout(resolve, 1500));
-
     const newSteps = 7240 + Math.floor(Math.random() * 500);
-    const newSleep = 6.8;
-    const newWater = healthStats.waterGlassCount;
-
     setHealthStats(prev => ({
       ...prev,
       steps: newSteps,
-      sleepHours: newSleep,
-      waterGlassCount: newWater,
       isSyncing: false,
       lastUpdated: new Date()
     }));
+  }, [healthStats.permissionsGranted]);
 
-    const today = new Date().toISOString().split('T')[0];
-    setHabits(prev => prev.map(h => {
-      if (h.isAutoSynced) {
-        let isComplete = false;
-        if (h.healthMetric === 'STEPS' && newSteps >= (h.goalValue || 0)) isComplete = true;
-        if (h.healthMetric === 'SLEEP' && newSleep >= (h.goalValue || 0)) isComplete = true;
-        
-        if (isComplete && !h.history[today]) {
-          triggerDemoNotification('HEALTH', `Hábito Concluído: ${h.name}! 🔥`, `Você atingiu sua meta de saúde vinda do celular.`);
-          return { ...h, streak: h.streak + 1, history: { ...h.history, [today]: true } };
-        }
-      }
-      return h;
+  const updateHealthGoal = (type: 'STEPS' | 'SLEEP' | 'WATER', value: number) => {
+    setHealthStats(prev => ({
+      ...prev,
+      [type === 'STEPS' ? 'stepsGoal' : type === 'SLEEP' ? 'sleepGoal' : 'waterGoal']: value
     }));
-  }, [healthStats.permissionsGranted, healthStats.waterGlassCount]);
-
-  useEffect(() => {
-    const hasSeenTutorial = localStorage.getItem('flow_tutorial_seen');
-    if (!hasSeenTutorial && user) setShowTutorial(true);
-    
-    const permissions = localStorage.getItem('flow_health_permissions');
-    if (permissions === 'true') {
-      setHealthStats(prev => ({ ...prev, permissionsGranted: true }));
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (healthStats.permissionsGranted && user) {
-      syncHealthData();
-    }
-  }, [healthStats.permissionsGranted, syncHealthData, user]);
-
-  const handleGrantPermissions = () => {
-    localStorage.setItem('flow_health_permissions', 'true');
-    setHealthStats(prev => ({ ...prev, permissionsGranted: true }));
-    setShowHealthPermissions(false);
-  };
-
-  const completeTutorial = () => {
-    localStorage.setItem('flow_tutorial_seen', 'true');
-    setShowTutorial(false);
-  };
-
-  const restartTutorial = () => {
-    localStorage.removeItem('flow_tutorial_seen');
-    setShowTutorial(true);
-    setActiveView('HOME');
   };
 
   const addWater = () => {
     setHealthStats(prev => ({
       ...prev,
-      waterGlassCount: Math.min(prev.waterGlassCount + 1, prev.waterGoal)
+      waterGlassCount: Math.min(prev.waterGlassCount + 1, prev.waterGoal * 2) // Permite beber o dobro da meta
     }));
   };
 
@@ -176,7 +134,7 @@ const App: React.FC = () => {
     const newNotif: AppNotification = {
       id: Math.random().toString(),
       title: title || 'Notificação Flow',
-      body: body || 'Sincronização concluída com sucesso.',
+      body: body || 'Sincronização concluída.',
       type,
       timestamp: new Date(),
       isPersistent: type === 'TASK'
@@ -186,7 +144,6 @@ const App: React.FC = () => {
     setNotifications(prev => [newNotif, ...prev].slice(0, 10));
   };
 
-  // Se não estiver logado, mostra a tela de login
   if (!user) {
     return <LoginView onLogin={handleLogin} />;
   }
@@ -196,8 +153,13 @@ const App: React.FC = () => {
       <div className="fixed top-[-20%] left-[-10%] w-[70%] h-[60%] bg-blue-600/10 rounded-full blur-[140px] -z-10 animate-pulse"></div>
       
       <header className="px-6 pt-12 pb-4 flex justify-between items-center sticky top-0 bg-slate-950/70 backdrop-blur-2xl z-40 border-b border-white/5">
-        <div className="cursor-pointer" onClick={() => setActiveView('HOME')}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveView('HOME')}>
           <h1 className="text-2xl font-black tracking-tighter">FLOW<span className="text-blue-500">.</span></h1>
+          <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
+          <div className="flex items-center gap-2">
+            <img src={user.avatar} className="w-6 h-6 rounded-lg border border-white/10" alt="Avatar" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Olá, {user.name.split(' ')[0]}</span>
+          </div>
         </div>
         <div className="flex gap-3">
           <button 
@@ -208,7 +170,6 @@ const App: React.FC = () => {
           </button>
           <button onClick={() => setIsAIChatOpen(true)} className="p-3 rounded-2xl glass text-purple-400 hover:scale-105 transition-all flex items-center gap-2">
             <MessageSquare size={18} />
-            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">AI Chat</span>
           </button>
         </div>
       </header>
@@ -239,7 +200,7 @@ const App: React.FC = () => {
           }));
         }} />}
         {activeView === 'PLANNER' && <PlannerView routineBlocks={routineBlocks} onAddClick={() => setIsAddRoutineOpen(true)} onSlotClick={(t) => {setPrefilledStartTime(t); setIsAddRoutineOpen(true);}} />}
-        {activeView === 'SETTINGS' && <SettingsView onRestartTutorial={restartTutorial} user={user} onLogout={handleLogout} />}
+        {activeView === 'SETTINGS' && <SettingsView onRestartTutorial={() => setShowTutorial(true)} user={user} onLogout={handleLogout} />}
       </main>
 
       <nav className="fixed bottom-6 left-6 right-6 h-20 glass rounded-[36px] flex items-center justify-around px-2 z-50 shadow-2xl shadow-black/50 border border-white/10">
@@ -253,25 +214,13 @@ const App: React.FC = () => {
       </nav>
 
       {/* Overlays */}
-      {showTutorial && <TutorialOverlay onComplete={completeTutorial} />}
-      {showHealthPermissions && <HealthPermissionsOverlay onClose={() => setShowHealthPermissions(false)} onGrant={handleGrantPermissions} />}
-      {activeHealthDetail && (
-        <HealthDetailOverlay 
-          type={activeHealthDetail} 
-          stats={healthStats} 
-          onClose={() => setActiveHealthDetail(null)} 
-          onAddWater={addWater}
-        />
-      )}
-      {isAIChatOpen && (
-        <AIChatOverlay 
-          onClose={() => setIsAIChatOpen(false)} 
-          currentData={{ healthStats, tasks, habits }}
-        />
-      )}
+      {showTutorial && <TutorialOverlay onComplete={() => setShowTutorial(false)} />}
+      {showHealthPermissions && <HealthPermissionsOverlay onClose={() => setShowHealthPermissions(false)} onGrant={() => setHealthStats(p => ({...p, permissionsGranted: true}))} />}
+      {activeHealthDetail && <HealthDetailOverlay type={activeHealthDetail} stats={healthStats} onClose={() => setActiveHealthDetail(null)} onAddWater={addWater} onUpdateGoal={updateHealthGoal} />}
+      {isAIChatOpen && <AIChatOverlay onClose={() => setIsAIChatOpen(false)} currentData={{ healthStats, tasks, habits }} />}
       {isAddTaskOpen && <AddTaskOverlay onClose={() => setIsAddTaskOpen(false)} onAdd={(t) => {setTasks([ ...tasks, { ...t, id: Math.random().toString(), completed: false, reminders: [] } ]); setIsAddTaskOpen(false);}} />}
       {isAddRoutineOpen && <AddRoutineBlockOverlay prefilledStart={prefilledStartTime} onClose={() => setIsAddRoutineOpen(false)} onAdd={(b) => {setRoutineBlocks([...routineBlocks, { ...b, id: Math.random().toString() }]); setIsAddRoutineOpen(false);}} />}
-      {isAIOverlayOpen && <AISuggestionsOverlay onClose={() => setIsAIOverlayOpen(false)} onAction={(type) => {}} />}
+      {isAIOverlayOpen && <AISuggestionsOverlay onClose={() => setIsAIOverlayOpen(false)} onAction={() => {}} />}
       {showNotificationMock && activeNotification && <NotificationOverlay notification={activeNotification} onClose={() => setShowNotificationMock(false)} />}
     </div>
   );

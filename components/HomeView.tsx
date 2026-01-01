@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Footprints, Moon, Droplets, ChevronRight, Plus, RefreshCcw, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Footprints, Moon, Droplets, ChevronRight, Plus, RefreshCcw, ShieldCheck, AlertCircle, Edit2 } from 'lucide-react';
 import { HealthStats, Task, Habit, RoutineBlock } from '../types';
 
 interface HomeViewProps {
@@ -74,12 +74,15 @@ const HomeView: React.FC<HomeViewProps> = ({ healthStats, onAddWater, onDetailCl
               <Droplets size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Hidratação Diária</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Hidratação Diária</p>
+                <Edit2 size={10} className="text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
               <h4 className="text-xl font-black">{healthStats.waterGlassCount} de {healthStats.waterGoal} copos</h4>
               <div className="w-32 h-1.5 bg-slate-800 rounded-full mt-2 overflow-hidden">
                 <div 
-                  className="h-full bg-cyan-400 transition-all duration-1000" 
-                  style={{ width: `${(healthStats.waterGlassCount / healthStats.waterGoal) * 100}%` }}
+                  className="h-full bg-cyan-400 transition-all duration-1000 shadow-[0_0_8px_rgba(34,211,238,0.4)]" 
+                  style={{ width: `${Math.min((healthStats.waterGlassCount / healthStats.waterGoal) * 100, 100)}%` }}
                 ></div>
               </div>
             </div>
@@ -97,7 +100,9 @@ const HomeView: React.FC<HomeViewProps> = ({ healthStats, onAddWater, onDetailCl
       <div className="p-6 glass rounded-[36px] bg-gradient-to-br from-blue-600/10 to-transparent border-blue-500/10">
         <h3 className="text-sm font-black uppercase tracking-widest text-blue-400 mb-3">Insight Flow</h3>
         <p className="text-sm font-bold leading-relaxed text-slate-200 italic">
-          "Você já deu {healthStats.steps.toLocaleString()} passos hoje – só faltam {(healthStats.stepsGoal - healthStats.steps).toLocaleString()} pra bater a meta de 10k! 🚀"
+          {healthStats.waterGlassCount >= healthStats.waterGoal 
+            ? "Você bateu sua meta de hidratação hoje! Corpo nota 10! ✨" 
+            : `Você já bebeu ${healthStats.waterGlassCount} de ${healthStats.waterGoal} copos hoje! Falta pouco pra bater a meta 🔥`}
         </p>
       </div>
     </div>
