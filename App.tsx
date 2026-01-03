@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Home, List, Activity, Calendar, Settings, Bell, Plus, Sparkles, RefreshCcw, MessageSquare, User as UserIcon } from 'lucide-react';
 import { AppView, Task, Habit, Priority, AppNotification, RoutineBlock, HealthStats, User } from './types';
+
 import HomeView from './components/HomeView';
 import TasksView from './components/TasksView';
 import HabitsView from './components/HabitsView';
