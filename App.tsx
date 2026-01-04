@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Home, List, Activity, Calendar, Settings, Bell, Plus, Sparkles, RefreshCcw, MessageSquare, User as UserIcon } from 'lucide-react';
 import { AppView, Task, Habit, Priority, AppNotification, RoutineBlock, HealthStats, User } from './types';
+import { supabase } from './supabaseClient';
 
 import HomeView from './components/HomeView';
 import TasksView from './components/TasksView';
@@ -30,7 +31,6 @@ const App: React.FC = () => {
   const [activeHealthDetail, setActiveHealthDetail] = useState<'STEPS' | 'SLEEP' | 'WATER' | null>(null);
   const [prefilledStartTime, setPrefilledStartTime] = useState('09:00');
   
-  // Estados de dados do usuário
   const [healthStats, setHealthStats] = useState<HealthStats>({
     steps: 0, stepsGoal: 10000, sleepHours: 0, sleepGoal: 8,
     waterGlassCount: 0, waterGoal: 8, lastUpdated: new Date(),
@@ -44,56 +44,111 @@ const App: React.FC = () => {
   const [showNotificationMock, setShowNotificationMock] = useState(false);
   const [activeNotification, setActiveNotification] = useState<AppNotification | null>(null);
 
-  // Referência para evitar loop de salvamento no carregamento inicial
   const initialLoadDone = useRef(false);
 
-  // Carregar sessão e dados do usuário
+  // Carregar sessão
   useEffect(() => {
     const savedUser = localStorage.getItem('flow_user_session');
     if (savedUser) {
       const userData = JSON.parse(savedUser);
       setUser(userData);
-      loadUserData(userData.id);
+      fetchDataFromCloud(userData.id);
     }
   }, []);
 
-  const loadUserData = (userId: string) => {
+  const fetchDataFromCloud = async (userId: string) => {
+    if (userId === 'guest') {
+      loadLocalData(userId);
+      return;
+    }
+
+    try {
+      console.log("🔄 Buscando dados da nuvem...");
+      
+      const [tasksRes, habitsRes, routineRes] = await Promise.all([
+        supabase.from('tasks').select('*').eq('user_id', userId),
+        supabase.from('habits').select('*').eq('user_id', userId),
+        supabase.from('routine').select('*').eq('user_id', userId)
+      ]);
+
+      if (tasksRes.data) setTasks(tasksRes.data);
+      if (habitsRes.data) setHabits(habitsRes.data);
+      if (routineRes.data) setRoutineBlocks(routineRes.data);
+      
+      console.log("✅ Dados carregados da nuvem");
+    } catch (error) {
+      console.error("❌ Erro ao carregar da nuvem, usando local:", error);
+      loadLocalData(userId);
+    } finally {
+      initialLoadDone.current = true;
+    }
+  };
+
+  const loadLocalData = (userId: string) => {
     const prefix = `flow_user_${userId}_`;
     const savedTasks = localStorage.getItem(`${prefix}tasks`);
     const savedHabits = localStorage.getItem(`${prefix}habits`);
     const savedRoutine = localStorage.getItem(`${prefix}routine`);
-    const savedHealth = localStorage.getItem(`${prefix}health`);
 
     if (savedTasks) setTasks(JSON.parse(savedTasks));
     if (savedHabits) setHabits(JSON.parse(savedHabits));
     if (savedRoutine) setRoutineBlocks(JSON.parse(savedRoutine));
-    if (savedHealth) setHealthStats(JSON.parse(savedHealth));
     
     initialLoadDone.current = true;
   };
 
-  // Auto-Sync: Salvar sempre que houver mudanças
+  // Sincronização Automática
   useEffect(() => {
     if (user && initialLoadDone.current) {
-      const prefix = `flow_user_${user.id}_`;
-      localStorage.setItem(`${prefix}tasks`, JSON.stringify(tasks));
-      localStorage.setItem(`${prefix}habits`, JSON.stringify(habits));
-      localStorage.setItem(`${prefix}routine`, JSON.stringify(routineBlocks));
-      localStorage.setItem(`${prefix}health`, JSON.stringify(healthStats));
-      console.log("☁️ Sincronizado com a nuvem do usuário:", user.name);
+      const saveToCloud = async () => {
+        if (user.id === 'guest') {
+          const prefix = `flow_user_${user.id}_`;
+          localStorage.setItem(`${prefix}tasks`, JSON.stringify(tasks));
+          localStorage.setItem(`${prefix}habits`, JSON.stringify(habits));
+          localStorage.setItem(`${prefix}routine`, JSON.stringify(routineBlocks));
+          return;
+        }
+
+        try {
+          // Salvar Tasks
+          await supabase.from('tasks').delete().eq('user_id', user.id);
+          if (tasks.length > 0) {
+            await supabase.from('tasks').insert(tasks.map(t => ({ ...t, user_id: user.id })));
+          }
+
+          // Salvar Habits
+          await supabase.from('habits').delete().eq('user_id', user.id);
+          if (habits.length > 0) {
+            await supabase.from('habits').insert(habits.map(h => ({ ...h, user_id: user.id })));
+          }
+
+          // Salvar Routine
+          await supabase.from('routine').delete().eq('user_id', user.id);
+          if (routineBlocks.length > 0) {
+            await supabase.from('routine').insert(routineBlocks.map(r => ({ ...r, user_id: user.id })));
+          }
+
+          console.log("☁️ Sincronizado com Supabase");
+        } catch (e) {
+          console.error("❌ Erro na sincronização cloud:", e);
+        }
+      };
+
+      const timeoutId = setTimeout(saveToCloud, 1000);
+      return () => clearTimeout(timeoutId);
     }
-  }, [tasks, habits, routineBlocks, healthStats, user]);
+  }, [tasks, habits, routineBlocks, user]);
 
   const handleLogin = (userData: User) => {
     setUser(userData);
     localStorage.setItem('flow_user_session', JSON.stringify(userData));
-    loadUserData(userData.id);
+    initialLoadDone.current = false;
+    fetchDataFromCloud(userData.id);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('flow_user_session');
-    // Limpar estados locais
     setTasks([]);
     setHabits([]);
     setRoutineBlocks([]);
@@ -127,7 +182,7 @@ const App: React.FC = () => {
   const addWater = () => {
     setHealthStats(prev => ({
       ...prev,
-      waterGlassCount: Math.min(prev.waterGlassCount + 1, prev.waterGoal * 2) // Permite beber o dobro da meta
+      waterGlassCount: Math.min(prev.waterGlassCount + 1, prev.waterGoal * 2)
     }));
   };
 
@@ -214,7 +269,6 @@ const App: React.FC = () => {
         <NavButton active={activeView === 'SETTINGS'} icon={<Settings size={22} />} onClick={() => setActiveView('SETTINGS')} label="Apps" />
       </nav>
 
-      {/* Overlays */}
       {showTutorial && <TutorialOverlay onComplete={() => setShowTutorial(false)} />}
       {showHealthPermissions && <HealthPermissionsOverlay onClose={() => setShowHealthPermissions(false)} onGrant={() => setHealthStats(p => ({...p, permissionsGranted: true}))} />}
       {activeHealthDetail && <HealthDetailOverlay type={activeHealthDetail} stats={healthStats} onClose={() => setActiveHealthDetail(null)} onAddWater={addWater} onUpdateGoal={updateHealthGoal} />}
